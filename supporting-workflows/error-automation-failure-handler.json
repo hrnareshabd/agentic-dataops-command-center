@@ -1,0 +1,177 @@
+{
+  "name": "WF-00 - Automation Failure Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "75522684-65ca-4dab-aebe-e578b3618cb1",
+      "name": "Automation Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        16,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input=$input.first().json;\nconst source_execution_id=String(input.execution?.id || '');\nif(source_execution_id && !/^\\d+$/.test(source_execution_id)) throw new Error('Invalid source execution ID');\nconst failed_stage=input.execution?.lastNodeExecuted || input.trigger?.error?.node?.name || 'trigger/unknown';\nreturn [{json:{workflow:'WF-00',status:'FAILED',failure_kind:'UNHANDLED_AUTOMATION_ERROR',source_execution_id,failed_stage,source_workflow_id:String(input.workflow?.id || 'CONFIGURE_WF_00_ID'),execution_url:source_execution_id ? 'https://YOUR-N8N-INSTANCE.example/workflow/CONFIGURE_WF_00_ID/executions/'+source_execution_id : 'https://YOUR-N8N-INSTANCE.example/workflow/CONFIGURE_WF_00_ID',message:'Automation failed. Review the private execution; error details are not included in email.'}}];"
+      },
+      "id": "c32239cd-0c88-4109-b658-df0b269029f3",
+      "name": "Build Automation Failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        256,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE public.dataops_orchestrator_runs SET status='FAILED',completed_at=now(),result=$1::jsonb WHERE execution_id=$2 AND status='RUNNING';",
+        "options": {
+          "queryReplacement": "={{ [JSON.stringify($json),$json.source_execution_id] }}"
+        }
+      },
+      "id": "580f74f2-3d51-4b96-9dc0-62254d362896",
+      "name": "Mark Owning Run Failed",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        496,
+        -144
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "sendTo": "YOUR_NOTIFICATION_EMAIL@example.com",
+        "subject": "[DataOps] WF-00 automation failure",
+        "emailType": "text",
+        "message": "={{ ['WF-00 automation failed at '+$('Build Automation Failure').first().json.failed_stage+'.','Review execution: '+$('Build Automation Failure').first().json.execution_url,'Check the run claim before retrying. Production actions still require human approval.'].join('\\n') }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "1c0e2fef-051b-447d-b852-cafe5bf16069",
+      "name": "Send Automation Failure Alert",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        736,
+        -144
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "ec08c9da-ba6f-4938-868b-4abf6381bee4",
+      "name": "Test Failure Notification",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        208,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "execution-0",
+              "name": "execution",
+              "type": "object",
+              "value": {
+                "id": "",
+                "lastNodeExecuted": "TEST \u2014 synthetic failure notification"
+              }
+            },
+            {
+              "id": "workflow-1",
+              "name": "workflow",
+              "type": "object",
+              "value": {
+                "id": "CONFIGURE_WF_00_ID",
+                "name": "WF-00 - DataOps Orchestrator"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "057deac2-7e74-4528-952b-614e7c968e95",
+      "name": "Safe Test Error Event",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        448,
+        -16
+      ]
+    }
+  ],
+  "connections": {
+    "Automation Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build Automation Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Automation Failure": {
+      "main": [
+        [
+          {
+            "node": "Mark Owning Run Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Owning Run Failed": {
+      "main": [
+        [
+          {
+            "node": "Send Automation Failure Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test Failure Notification": {
+      "main": [
+        [
+          {
+            "node": "Safe Test Error Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Safe Test Error Event": {
+      "main": [
+        [
+          {
+            "node": "Build Automation Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "active": false,
+  "pinData": {}
+}

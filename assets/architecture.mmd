@@ -1,0 +1,24 @@
+flowchart TD
+    T[Manual or daily trigger] --> C[WF-00 Prepare context and resolve pipeline run]
+    C --> I[(PostgreSQL atomic run claim)]
+    I -->|Already claimed| S[Skip repeated run]
+    I -->|Acquired| D[WF-01 Data Quality Monitor]
+    D --> Q{Complete and healthy?}
+    Q -->|Healthy| H[Record healthy outcome]
+    Q -->|Incident| A[WF-02 SQL Analytics Agent]
+    A --> R{Dry run?}
+    R -->|Yes| DR[Record dry-run report; skip remediation]
+    R -->|No| RCA[WF-03 Evidence and RCA]
+    RCA --> CR[Critic and revision gate]
+    CR --> P{Human approval}
+    P -->|Approved| W[Quarantine duplicate and audit]
+    P -->|Rejected| REJ[Log rejection]
+    W --> O[Final incident report]
+    REJ --> O
+    H --> N[Gmail notifications when applicable]
+    DR --> N
+    O --> N
+    D -. Child error .-> E[Failure report, ledger and Gmail alert]
+    A -. Child error .-> E
+    RCA -. Child error .-> E
+    C -. Unhandled production error .-> EH[Supporting Error Trigger handler]

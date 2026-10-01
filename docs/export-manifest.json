@@ -1,0 +1,32 @@
+[
+  {
+    "workflow": "WF-00",
+    "file": "workflows/wf-00-orchestrator.json",
+    "nodes": 29,
+    "sha256": "58fbd785a7eb020d71c405b2c6726d992f5d8c258dc993b2c8bf853dcd40e307"
+  },
+  {
+    "workflow": "WF-01",
+    "file": "workflows/wf-01-data-quality-monitor.json",
+    "nodes": 20,
+    "sha256": "d39441846c6ca7bafb4069f42d1fb0cb179ce77eaaea4190a6f2201f0161b4c0"
+  },
+  {
+    "workflow": "WF-02",
+    "file": "workflows/wf-02-sql-analytics-agent.json",
+    "nodes": 16,
+    "sha256": "1787823ad933d773dc5eeead96b79c260cc26f5acbc0f0db910f21669264dec1"
+  },
+  {
+    "workflow": "WF-03",
+    "file": "workflows/wf-03-incident-rca-agent.json",
+    "nodes": 33,
+    "sha256": "27b5cb6e69da27d39625ea8e24ec1d2edd075beedddbdc3cb0eec48d1a865429"
+  },
+  {
+    "workflow": "ERROR",
+    "file": "supporting-workflows/error-automation-failure-handler.json",
+    "nodes": 6,
+    "sha256": "4b08c0454d08bb234e46440f19052c97566bec41d0402f3d163fe5c6dde892ca"
+  }
+]

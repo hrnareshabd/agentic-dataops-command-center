@@ -1,0 +1,77 @@
+{
+  "rca": {
+    "incident_title": "Critical Pipeline Failure in orders_daily_etl due to Duplicate Order IDs",
+    "severity": "CRITICAL",
+    "confirmed_facts": [
+      "The pipeline orders_daily_etl (run_id: 1) failed on 2026-09-28T20:08:00.000Z.",
+      "The pipeline error message states: 'Duplicate external_order_id detected while loading fact_orders'.",
+      "One group of duplicate external_order_id values was detected for ID: DEMO-ANOM-20260928-DUP.",
+      "Order volume was 5 records, which is significantly below the baseline of 30.",
+      "60 percent of records (3 out of 5) lacked source values.",
+      "A price outlier was detected for external_order_id DEMO-ANOM-20260928-3 with an observed price of 9999.00 units compared to an expected 149.00 units.",
+      "Target revenue was 10595 units, representing a 62.83% decrease from the 7-day average."
+    ],
+    "hypotheses": [
+      {
+        "cause": "The pipeline orders_daily_etl failed due to the presence of duplicate external_order_id values during the fact_orders load process.",
+        "confidence": 0.95,
+        "supporting_evidence": [
+          "Pipeline error message explicitly mentions 'Duplicate external_order_id detected while loading fact_orders'.",
+          "Data quality findings confirmed a group of duplicate external_order_id values (DEMO-ANOM-20260928-DUP)."
+        ],
+        "contradicting_evidence": []
+      },
+      {
+        "cause": "An upstream extraction or transmission issue resulted in incomplete data ingestion, leading to low order volume and missing source fields.",
+        "confidence": 0.7,
+        "supporting_evidence": [
+          "Observed order volume was only 5 compared to a baseline of 30.",
+          "60% of records were missing source values."
+        ],
+        "contradicting_evidence": []
+      },
+      {
+        "cause": "Data entry or system calculation error resulted in a price outlier for a specific product.",
+        "confidence": 0.6,
+        "supporting_evidence": [
+          "External_order_id DEMO-ANOM-20260928-3 showed a price deviation of 6610.74% (9999.00 units vs 149.00 units)."
+        ],
+        "contradicting_evidence": []
+      }
+    ],
+    "most_likely_cause": "The immediate cause of the pipeline failure was the detection of duplicate external_order_id values ('DEMO-ANOM-20260928-DUP') during the loading of fact_orders, which triggered a stop in the orders_daily_etl process.",
+    "business_impact": "Reporting anomaly observed with revenue units 62.83% below the 7-day average, potentially due to incomplete data loading and pipeline failure. The accuracy of revenue reporting is compromised by missing source values and a significant price outlier.",
+    "recommended_actions": [
+      {
+        "action": "Investigate and quarantine the records associated with duplicate external_order_id 'DEMO-ANOM-20260928-DUP'.",
+        "risk": "Minimal; isolates problematic data for review without affecting other datasets.",
+        "requires_approval": true
+      },
+      {
+        "action": "Investigate the upstream source for the 60% missing source values and low volume count (5 observed vs 30 baseline).",
+        "risk": "Low; involves read-only investigation of upstream data flows.",
+        "requires_approval": false
+      },
+      {
+        "action": "Manually verify the transaction details for order_id 1773 (external_order_id DEMO-ANOM-20260928-3) to determine the validity of the 9999.00 unit price.",
+        "risk": "Low; data verification process.",
+        "requires_approval": false
+      }
+    ],
+    "requires_human_approval": true
+  },
+  "critic": {
+    "pass": true,
+    "quality_score": 100,
+    "issues": [],
+    "strengths": [
+      "Strictly adhered to currency formatting requirements by using 'units' instead of currency symbols.",
+      "Accurately distinguished between the reported revenue anomaly and actual economic loss.",
+      "Directly utilized provided error messages without inventing underlying database mechanisms or constraint names.",
+      "Correctly identified all data quality failures, including order volume, missing source values, and price outliers.",
+      "Maintained safety by requiring human approval for production-impacting actions such as record quarantine."
+    ],
+    "revision_required": false,
+    "revision_instructions": []
+  }
+}

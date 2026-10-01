@@ -1,0 +1,143 @@
+{
+  "run_id": 1,
+  "status": "DRY_RUN_COMPLETED",
+  "message": "Dry run completed through DQ and analytics. RCA remediation was not invoked.",
+  "workflow": "WF-00",
+  "analytics": {
+    "summary": "Revenue on 2026-09-28 significantly underperformed compared to the previous 7-day daily average, showing a decline of 62.83%.",
+    "insights": [
+      "The revenue on 2026-09-28 was 10595.00.",
+      "The baseline average for the preceding 7-day period was 28504.50.",
+      "The absolute difference between the target date and the baseline is -17909.50.",
+      "The recorded revenue for 2026-09-28 represents a substantial negative deviation and is considered an anomaly relative to the supplied baseline."
+    ],
+    "target_value": "10595.00",
+    "baseline_value": "28504.50",
+    "percentage_change": "-62.83%",
+    "root_cause_status": "Root-cause investigation is required to determine the reason for this revenue decrease.",
+    "absolute_difference": "-17909.50"
+  },
+  "data_quality": {
+    "score": 0,
+    "checks": [
+      {
+        "status": "FAIL",
+        "details": {
+          "target_date": "2026-09-28",
+          "baseline_days": 7,
+          "drop_threshold_pct": 40
+        },
+        "severity": "HIGH",
+        "check_name": "order_volume",
+        "baseline_value": "30.0000000000000000",
+        "observed_value": "5"
+      },
+      {
+        "status": "FAIL",
+        "details": {
+          "unit": "duplicate ID groups",
+          "target_date": "2026-09-28"
+        },
+        "severity": "HIGH",
+        "check_name": "duplicate_orders",
+        "baseline_value": "0",
+        "observed_value": "1"
+      },
+      {
+        "status": "FAIL",
+        "details": {
+          "total": 5,
+          "missing": 3,
+          "target_date": "2026-09-28"
+        },
+        "severity": "MEDIUM",
+        "check_name": "missing_source",
+        "baseline_value": "2",
+        "observed_value": "60.00"
+      },
+      {
+        "status": "FAIL",
+        "details": {
+          "target_date": "2026-09-28",
+          "deviation_threshold_pct": 50
+        },
+        "severity": "HIGH",
+        "check_name": "price_outlier",
+        "baseline_value": "0",
+        "observed_value": "1"
+      },
+      {
+        "status": "FAIL",
+        "details": {
+          "runs": [
+            {
+              "rows": 5,
+              "error": "Duplicate external_order_id detected while loading fact_orders",
+              "status": "FAILED",
+              "pipeline": "orders_daily_etl"
+            }
+          ],
+          "target_date": "2026-09-28"
+        },
+        "severity": "CRITICAL",
+        "check_name": "pipeline_failure",
+        "baseline_value": "0",
+        "observed_value": "1"
+      }
+    ],
+    "health": "ISSUES_DETECTED",
+    "status": "AWAITING_HUMAN_REVIEW",
+    "diagnosis": {
+      "score": 0,
+      "summary": "Multiple critical data quality issues have been detected for run_id 173 on 2026-09-28. The primary concern is a CRITICAL pipeline failure in 'orders_daily_etl' due to a 'Duplicate external_order_id'. This duplicate order is confirmed by the 'duplicate_orders' check. This failure likely contributes to the significantly low observed order volume (5 instead of 30) and a high percentage of missing source data (60%). A price outlier was also identified.",
+      "findings": [
+        {
+          "evidence": "Observed order volume is 5, which is significantly below the baseline of 30.0 (a drop exceeding the 40% threshold).",
+          "check_name": "order_volume",
+          "confidence": 0.8,
+          "hypothesis": "The low order volume is likely a consequence of the pipeline failure and/or the high percentage of missing source data, preventing orders from being processed correctly. It could also indicate a genuine drop in orders, but given other issues, data processing problems are more probable."
+        },
+        {
+          "evidence": "One duplicate order ID group was detected, exceeding the baseline of 0.",
+          "check_name": "duplicate_orders",
+          "confidence": 1,
+          "hypothesis": "The presence of a duplicate order ID is the direct cause of the 'Duplicate external_order_id detected' error in the 'orders_daily_etl' pipeline, leading to its failure."
+        },
+        {
+          "evidence": "60% of source data is missing (3 out of 5 total records), significantly above the baseline of 2%.",
+          "check_name": "missing_source",
+          "confidence": 0.9,
+          "hypothesis": "The high percentage of missing source data indicates an upstream data ingestion or generation issue, which could contribute to the low observed order volume and potentially lead to incomplete or erroneous order processing."
+        },
+        {
+          "evidence": "One price outlier was detected, exceeding the baseline of 0.",
+          "check_name": "price_outlier",
+          "confidence": 0.7,
+          "hypothesis": "A single price outlier suggests a potential data entry error or an unusual but legitimate transaction. While not directly linked to the pipeline failure, it indicates a data quality issue that warrants investigation."
+        },
+        {
+          "evidence": "The 'orders_daily_etl' pipeline failed with the error message: 'Duplicate external_order_id detected while loading fact_orders'.",
+          "check_name": "pipeline_failure",
+          "confidence": 1,
+          "hypothesis": "The pipeline failure is directly caused by the presence of a duplicate 'external_order_id' in the input data, as confirmed by the `duplicate_orders` check. This failure prevents the successful processing of orders for the target date."
+        }
+      ],
+      "severity": "CRITICAL",
+      "approval_required": true,
+      "recommended_next_steps": [
+        "Investigate the 'orders_daily_etl' pipeline failure, focusing on the 'Duplicate external_order_id' error.",
+        "Identify and resolve the source of the duplicate order ID in the input data.",
+        "Address the upstream issue causing 60% of source data to be missing.",
+        "Review the detected price outlier for potential data entry errors or unusual transactions.",
+        "Once the root causes are addressed, re-run the affected pipeline for 2026-09-28."
+      ]
+    },
+    "target_date": "2026-09-28",
+    "failed_checks": 5,
+    "approval_required": true,
+    "remediation_executed": false,
+    "requires_human_approval": true
+  },
+  "incident_date": "2026-09-28",
+  "remediation_executed": false
+}

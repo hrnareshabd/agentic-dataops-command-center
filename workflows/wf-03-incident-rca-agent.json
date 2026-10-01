@@ -1,0 +1,1049 @@
+{
+  "name": "WF-03 - Incident RCA Agent",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        48
+      ],
+      "id": "b2a88adf-9159-49e5-aacf-c9caeefe468c",
+      "name": "When clicking \u2018Execute workflow\u2019"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n  \"incident_date\": \"2026-09-28\",\n  \"run_id\": 1,\n  \"data_quality\": {\n    \"severity\": \"CRITICAL\",\n    \"score\": 0,\n    \"findings\": [\n      {\n        \"check_name\": \"order_volume\",\n        \"observed_value\": 5,\n        \"baseline_value\": 30,\n        \"status\": \"FAIL\",\n        \"evidence\": \"Observed order volume was 5 compared with a baseline of 30.\"\n      },\n      {\n        \"check_name\": \"duplicate_orders\",\n        \"observed_value\": 1,\n        \"baseline_value\": 0,\n        \"status\": \"FAIL\",\n        \"evidence\": \"One group of duplicate external_order_id values was detected.\"\n      },\n      {\n        \"check_name\": \"missing_source\",\n        \"observed_value\": 60,\n        \"baseline_value\": 2,\n        \"status\": \"FAIL\",\n        \"evidence\": \"60 percent of records had missing source values.\"\n      },\n      {\n        \"check_name\": \"price_outlier\",\n        \"observed_value\": 1,\n        \"baseline_value\": 0,\n        \"status\": \"FAIL\",\n        \"evidence\": \"One price outlier was detected.\"\n      },\n      {\n        \"check_name\": \"pipeline_failure\",\n        \"observed_value\": 1,\n        \"baseline_value\": 0,\n        \"status\": \"FAIL\",\n        \"evidence\": \"orders_daily_etl failed because duplicate external_order_id values were detected while loading fact_orders.\"\n      }\n    ]\n  },\n  \"analytics\": {\n    \"target_revenue\": 10595,\n    \"avg_revenue_prev_7d\": 28504.50,\n    \"absolute_difference\": -17909.50,\n    \"percentage_change\": -62.83\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -32,
+        48
+      ],
+      "id": "f79fd77f-91e7-41c3-b651-2763f4313b6b",
+      "name": "Test Incident Context"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    run_id,\n    pipeline_name,\n    started_at,\n    finished_at,\n    status,\n    rows_processed,\n    error_message\nFROM pipeline_runs\nWHERE run_id = {{ $json.run_id }};",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        688,
+        -288
+      ],
+      "id": "a4d027b3-1522-4be9-a890-61a0f48b93e6",
+      "name": "Get Pipeline Evidence"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    external_order_id,\n    COUNT(*) AS duplicate_count,\n    MIN(order_ts) AS first_seen,\n    MAX(order_ts) AS last_seen\nFROM orders\nWHERE external_order_id IS NOT NULL\nGROUP BY external_order_id\nHAVING COUNT(*) > 1\nORDER BY duplicate_count DESC;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        688,
+        -96
+      ],
+      "id": "d7b2fdc6-6a3d-4e2d-add1-ee4c8384e896",
+      "name": "Get Duplicate Evidence"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    o.order_id,\n    o.external_order_id,\n    p.product_name,\n    p.unit_price AS expected_price,\n    o.unit_price AS observed_price,\n    ROUND(\n        ((o.unit_price - p.unit_price)\n        / NULLIF(p.unit_price, 0)) * 100,\n        2\n    ) AS price_deviation_pct\nFROM orders o\nJOIN products p\n    ON o.product_id = p.product_id\nWHERE ABS(o.unit_price - p.unit_price)\n      > p.unit_price * 0.50\nORDER BY ABS(o.unit_price - p.unit_price) DESC;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        704,
+        112
+      ],
+      "id": "334663ca-3362-4532-a18a-5d181c9f400d",
+      "name": "Get Price Anomaly Evidence"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    COUNT(*) AS total_orders,\n    COUNT(*) FILTER (\n        WHERE source IS NULL\n    ) AS missing_source_orders,\n    ROUND(\n        100.0 *\n        COUNT(*) FILTER (WHERE source IS NULL)\n        / NULLIF(COUNT(*), 0),\n        2\n    ) AS missing_source_pct\nFROM orders\nWHERE order_ts::date = DATE '2026-09-28';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        704,
+        336
+      ],
+      "id": "d71b68ea-be82-4ffa-acc7-e566e9c322d9",
+      "name": "Get Missing Source Evidence"
+    },
+    {
+      "parameters": {
+        "numberInputs": 4
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1136,
+        -80
+      ],
+      "id": "99d626ab-d9e3-43bb-963e-c616825b93cc",
+      "name": "Merge Evidence"
+    },
+    {
+      "parameters": {
+        "jsCode": "const incident =\n  $('Normalize Incident Input').first().json;\n\nconst pipeline =\n  $('Get Pipeline Evidence').first().json;\n\nconst duplicates =\n  $('Get Duplicate Evidence')\n    .all()\n    .map(item => item.json);\n\nconst priceAnomalies =\n  $('Get Price Anomaly Evidence')\n    .all()\n    .map(item => item.json);\n\nconst missingSource =\n  $('Get Missing Source Evidence').first().json;\n\nreturn [\n  {\n    json: {\n      incident_date: incident.incident_date,\n      run_id: incident.run_id,\n\n      data_quality: incident.data_quality,\n\n      analytics: incident.analytics,\n\n      evidence: {\n        pipeline: pipeline,\n        duplicate_orders: duplicates,\n        price_anomalies: priceAnomalies,\n        missing_source: missingSource\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        -80
+      ],
+      "id": "e2ee9b26-cd64-462f-afa9-ce49b92f80f3",
+      "name": "Prepare RCA Context"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Incident context:\n\n{{ JSON.stringify($json) }}\n\nPerform an evidence-based root-cause analysis of this incident.",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are an Enterprise Data Incident Root Cause Analysis Agent.  Your job is to analyze data incidents using ONLY the supplied evidence.  STRICT RULES:  1. Never invent facts.  2. Separate:    - confirmed facts    - correlations    - hypotheses  3. Do not treat correlation as causation.  4. Every root-cause hypothesis must include supporting evidence.  5. Assign confidence between 0 and 1.  6. Rank hypotheses from strongest to weakest.  7. Prefer explanations supported by multiple independent signals.  8. If evidence is insufficient, explicitly say so.  9. Do not claim that the price anomaly caused the pipeline failure unless evidence directly supports that relationship.  10. Do not claim that missing source values caused the pipeline failure unless evidence supports that relationship.  11. Pay special attention to evidence explicitly present in pipeline error messages.  12. Any action that modifies production data must require human approval.  13. Never recommend automatic DELETE, DROP, TRUNCATE or destructive actions.  14. Safe investigation and quarantine recommendations are preferred.  15. Return structured output only.  EVIDENCE GROUNDING REQUIREMENTS: - The error \"Duplicate external_order_id detected while loading fact_orders\" establishes duplicate detection only. Do not assert a database unique constraint violation, constraint name, primary key, target constraint, transaction rollback, or specific database mechanism unless supplied evidence explicitly proves it. Describe an unverified mechanism only as an unconfirmed hypothesis, with confidence limited by missing evidence. - Revenue values have no supplied currency. Never add $, USD, EUR, another currency symbol/code, or call them dollars. Write revenue units or state currency unspecified. - Do not invent upstream system names (ERP, order management, vendors), manual entry errors, extraction filters, root causes, or provenance. State unknown where unsupported. - A low revenue observation is a reporting anomaly; do not assert actual lost sales or economic loss from incomplete data. - Confirmed facts must be directly traceable to supplied evidence. Preserve exact identifiers and separate observed errors from inferred mechanisms. - Recommended investigations must not be described as established facts. Retain all human approval requirements."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1584,
+        -80
+      ],
+      "id": "21a93a79-1b43-466c-93d4-368ec7d4dbcc",
+      "name": "RCA Reasoning Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1520,
+        128
+      ],
+      "id": "6895995f-67d6-4512-8705-247dcd1bffde",
+      "name": "Google Gemini Chat Model"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"incident_title\": \"string\",\n  \"severity\": \"CRITICAL\",\n  \"confirmed_facts\": [\n    \"string\"\n  ],\n  \"hypotheses\": [\n    {\n      \"cause\": \"string\",\n      \"confidence\": 0.9,\n      \"supporting_evidence\": [\n        \"string\"\n      ],\n      \"contradicting_evidence\": [\n        \"string\"\n      ]\n    }\n  ],\n  \"most_likely_cause\": \"string\",\n  \"business_impact\": \"string\",\n  \"recommended_actions\": [\n    {\n      \"action\": \"string\",\n      \"risk\": \"READ_ONLY\",\n      \"requires_approval\": false\n    }\n  ],\n  \"requires_human_approval\": true\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1744,
+        96
+      ],
+      "id": "d480e5bd-4f92-4683-90f1-6eadd57eda32",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Original incident evidence:\n\n{{ JSON.stringify($('Prepare RCA Context').first().json) }}\n\nRCA report to review:\n\n{{ JSON.stringify($json.output) }}\n\nEvaluate the RCA for factual grounding, reasoning quality, safety, and unsupported causal claims.",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are a rigorous reviewer of AI-generated root-cause analysis reports.  Your job is to evaluate whether the RCA is grounded in the supplied incident evidence.  Check all of the following:  1. Are all confirmed facts directly supported by evidence?  2. Does the RCA invent any facts?  3. Does it incorrectly present correlation as causation?  4. Are confidence scores reasonable?  5. Does the most likely cause have stronger evidence than alternative hypotheses?  6. Does the RCA incorrectly claim a database constraint violation without evidence?  7. Does it incorrectly claim that the revenue decline was directly caused by the pipeline failure?  8. Are unrelated anomalies being incorrectly linked together?  9. Are recommended actions safe and proportional?  10. Do all production-changing actions require human approval?  11. Are destructive actions avoided?  12. Are important pieces of evidence ignored?  Give a quality score from 0 to 100.  PASS only when the quality score is at least 85.  If the RCA fails, clearly explain what must be corrected.  Do not introduce new evidence. Use only the incident context and RCA supplied to you. Any unsupported currency designation, asserted uniqueness constraint violation/database mechanism, invented source system, or claimed actual financial loss is a grounding failure. Set pass=false and quality_score below 85 whenever any such unsupported assertion appears anywhere in the RCA. Give exact correction feedback.   EVIDENCE GROUNDING REQUIREMENTS: - The error \"Duplicate external_order_id detected while loading fact_orders\" establishes duplicate detection only. Do not assert a database unique constraint violation, constraint name, primary key, target constraint, transaction rollback, or specific database mechanism unless supplied evidence explicitly proves it. Describe an unverified mechanism only as an unconfirmed hypothesis, with confidence limited by missing evidence. - Revenue values have no supplied currency. Never add $, USD, EUR, another currency symbol/code, or call them dollars. Write revenue units or state currency unspecified. - Do not invent upstream system names (ERP, order management, vendors), manual entry errors, extraction filters, root causes, or provenance. State unknown where unsupported. - A low revenue observation is a reporting anomaly; do not assert actual lost sales or economic loss from incomplete data. - Confirmed facts must be directly traceable to supplied evidence. Preserve exact identifiers and separate observed errors from inferred mechanisms. - Recommended investigations must not be described as established facts. Retain all human approval requirements."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1952,
+        -80
+      ],
+      "id": "bd181c07-b0a4-4e9c-a27a-0fc5d8511369",
+      "name": "RCA Critic Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1888,
+        128
+      ],
+      "id": "184fe580-6496-43c8-900c-38a0449c13d5",
+      "name": "Google Gemini Chat Model1"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"pass\": true,\n  \"quality_score\": 90,\n  \"issues\": [\n    {\n      \"type\": \"UNSUPPORTED_CLAIM\",\n      \"description\": \"string\",\n      \"severity\": \"MEDIUM\"\n    }\n  ],\n  \"strengths\": [\n    \"string\"\n  ],\n  \"revision_required\": false,\n  \"revision_instructions\": [\n    \"string\"\n  ]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        2096,
+        128
+      ],
+      "id": "b28a6d70-d00a-491b-9f19-2bcf746f7ea5",
+      "name": "Structured Output Parser1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e308de14-8305-4bcd-ad03-47fd90230e6c",
+              "leftValue": "={{ $json.output.quality_score }}",
+              "rightValue": 85,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            },
+            {
+              "id": "14a3dd50-984b-4e58-b013-d4bea007c799",
+              "leftValue": "={{ $json.output.pass }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2320,
+        -80
+      ],
+      "id": "680f117f-ab3f-413e-8a91-15851e9ede4c",
+      "name": "RCA Quality Gate"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=ORIGINAL INCIDENT EVIDENCE:\n\n{{ JSON.stringify($('Prepare RCA Context').first().json) }}\n\n\nORIGINAL RCA:\n\n{{ JSON.stringify($('RCA Reasoning Agent').first().json.output) }}\n\n\nCRITIC FEEDBACK:\n\n{{ JSON.stringify($('RCA Critic Agent').first().json.output) }}\n\n\nProduce a corrected RCA that addresses valid critic feedback\nwhile remaining strictly grounded in the original evidence.",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are an Enterprise Data Incident RCA Revision Agent.  You receive:  1. Original incident evidence 2. The original RCA report 3. Critic feedback  Your responsibility is to produce a corrected RCA.  STRICT RULES:  1. Use ONLY the original incident evidence.  2. Correct every valid problem identified by the critic.  3. Do not introduce new facts.  4. Do not blindly accept critic statements that are themselves    unsupported by the original evidence.  5. Do not claim a database constraint was violated unless the    evidence explicitly states that.  6. The pipeline error explicitly states that duplicate    external_order_id values were detected during fact_orders loading.    You may identify this as the strongest supported explanation for    the pipeline failure.  7. Do NOT state that the pipeline failure directly caused the    revenue decline unless causality is proven.  8. Do NOT state that low source order volume caused the revenue    decline unless causality is proven.  9. You may state that:    - order volume was substantially below baseline,    - revenue was substantially below baseline,    - the pipeline failed,    - these conditions occurred during the same incident period.  10. Clearly distinguish confirmed facts, correlations and hypotheses.  11. Every hypothesis must include evidence and a confidence score.  12. Production-changing actions require human approval.  13. Never recommend automatic DELETE, DROP or destructive actions.  14. Prefer investigation, quarantine and controlled remediation.  Return a complete revised RCA report.  EVIDENCE GROUNDING REQUIREMENTS: - The error \"Duplicate external_order_id detected while loading fact_orders\" establishes duplicate detection only. Do not assert a database unique constraint violation, constraint name, primary key, target constraint, transaction rollback, or specific database mechanism unless supplied evidence explicitly proves it. Describe an unverified mechanism only as an unconfirmed hypothesis, with confidence limited by missing evidence. - Revenue values have no supplied currency. Never add $, USD, EUR, another currency symbol/code, or call them dollars. Write revenue units or state currency unspecified. - Do not invent upstream system names (ERP, order management, vendors), manual entry errors, extraction filters, root causes, or provenance. State unknown where unsupported. - A low revenue observation is a reporting anomaly; do not assert actual lost sales or economic loss from incomplete data. - Confirmed facts must be directly traceable to supplied evidence. Preserve exact identifiers and separate observed errors from inferred mechanisms. - Recommended investigations must not be described as established facts. Retain all human approval requirements."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        2544,
+        16
+      ],
+      "id": "9e9d0c5c-f02d-4994-b40b-b9a6f0cc8a4f",
+      "name": "RCA Revision Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        2480,
+        224
+      ],
+      "id": "4c09fb51-baea-4377-a53f-4b006cb46332",
+      "name": "Google Gemini Chat Model2"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"incident_title\": \"string\",\n  \"severity\": \"CRITICAL\",\n  \"confirmed_facts\": [\n    \"string\"\n  ],\n  \"hypotheses\": [\n    {\n      \"cause\": \"string\",\n      \"confidence\": 0.9,\n      \"supporting_evidence\": [\n        \"string\"\n      ],\n      \"contradicting_evidence\": [\n        \"string\"\n      ]\n    }\n  ],\n  \"most_likely_cause\": \"string\",\n  \"business_impact\": \"string\",\n  \"recommended_actions\": [\n    {\n      \"action\": \"string\",\n      \"risk\": \"LOW\",\n      \"requires_approval\": false\n    }\n  ],\n  \"requires_human_approval\": true\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        2688,
+        224
+      ],
+      "id": "c75b77a4-ef02-441b-889a-b71e8a114861",
+      "name": "Structured Output Parser2"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=ORIGINAL INCIDENT EVIDENCE:\n\n{{ JSON.stringify($('Prepare RCA Context').first().json) }}\n\n\nREVISED RCA REPORT:\n\n{{ JSON.stringify($('RCA Revision Agent').first().json.output) }}\n\n\nEvaluate whether the revised RCA is factually grounded,\navoids unsupported causal claims, handles uncertainty correctly,\nand proposes safe remediation.",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are a rigorous reviewer of AI-generated root-cause analysis reports.  Your job is to evaluate whether the RCA is grounded in the supplied incident evidence.  Check all of the following:  1. Are all confirmed facts directly supported by evidence?  2. Does the RCA invent any facts?  3. Does it incorrectly present correlation as causation?  4. Are confidence scores reasonable?  5. Does the most likely cause have stronger evidence than alternative hypotheses?  6. Does the RCA incorrectly claim a database constraint violation without evidence?  7. Does it incorrectly claim that the revenue decline was directly caused by the pipeline failure?  8. Are unrelated anomalies being incorrectly linked together?  9. Are recommended actions safe and proportional?  10. Do all production-changing actions require human approval?  11. Are destructive actions avoided?  12. Are important pieces of evidence ignored?  Give a quality score from 0 to 100.  PASS only when the quality score is at least 85.  If the RCA fails, clearly explain what must be corrected.  Do not introduce new evidence. Use only the incident context and RCA supplied to you. Any unsupported currency designation, asserted uniqueness constraint violation/database mechanism, invented source system, or claimed actual financial loss is a grounding failure. Set pass=false and quality_score below 85 whenever any such unsupported assertion appears anywhere in the RCA. Give exact correction feedback.   EVIDENCE GROUNDING REQUIREMENTS: - The error \"Duplicate external_order_id detected while loading fact_orders\" establishes duplicate detection only. Do not assert a database unique constraint violation, constraint name, primary key, target constraint, transaction rollback, or specific database mechanism unless supplied evidence explicitly proves it. Describe an unverified mechanism only as an unconfirmed hypothesis, with confidence limited by missing evidence. - Revenue values have no supplied currency. Never add $, USD, EUR, another currency symbol/code, or call them dollars. Write revenue units or state currency unspecified. - Do not invent upstream system names (ERP, order management, vendors), manual entry errors, extraction filters, root causes, or provenance. State unknown where unsupported. - A low revenue observation is a reporting anomaly; do not assert actual lost sales or economic loss from incomplete data. - Confirmed facts must be directly traceable to supplied evidence. Preserve exact identifiers and separate observed errors from inferred mechanisms. - Recommended investigations must not be described as established facts. Retain all human approval requirements."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        2912,
+        16
+      ],
+      "id": "01648fcf-2c6e-4ec8-9290-d6079564d573",
+      "name": "RCA Critic Agent 2"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        2848,
+        224
+      ],
+      "id": "1f483fc1-a5fa-4d74-b31b-a4d481a1c523",
+      "name": "Google Gemini Chat Model3"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"pass\": true,\n  \"quality_score\": 90,\n  \"issues\": [\n    {\n      \"type\": \"string\",\n      \"description\": \"string\",\n      \"severity\": \"LOW\"\n    }\n  ],\n  \"strengths\": [\n    \"string\"\n  ],\n  \"revision_required\": false,\n  \"revision_instructions\": [\n    \"string\"\n  ]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        3056,
+        224
+      ],
+      "id": "ed7b99db-8649-4378-bc8c-ae245faead50",
+      "name": "Structured Output Parser3"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "abb1b168-8641-43b4-bf32-039b5623b271",
+              "leftValue": "={{ $json.output.quality_score }}",
+              "rightValue": 85,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            },
+            {
+              "id": "40b4b2c6-56b2-4f60-90af-2544254bfa23",
+              "leftValue": "={{ $json.output.pass }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3280,
+        16
+      ],
+      "id": "5f4bd3f0-5d5a-475b-ace8-ad129c83bff0",
+      "name": "Final RCA Quality Gate"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "93dbfb5c-1776-4237-89bc-352e4c5d60f0",
+              "name": "rca",
+              "value": "={{ $('RCA Reasoning Agent').first().json.output }}",
+              "type": "object"
+            },
+            {
+              "id": "e77bcf79-033c-4346-a422-d589729ee7f6",
+              "name": "critic_score",
+              "value": "={{ $('RCA Critic Agent').first().json.output.quality_score }}",
+              "type": "number"
+            },
+            {
+              "id": "8aec7305-d7ef-4446-8193-45bce5923c1f",
+              "name": "status",
+              "value": "APPROVED_RCA",
+              "type": "string"
+            },
+            {
+              "id": "f4e11e47-b46a-4ecb-9159-79bc20ca9260",
+              "name": "requires_human_approval",
+              "value": "={{ $('RCA Reasoning Agent').first().json.output.requires_human_approval }}",
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        2560,
+        -224
+      ],
+      "id": "0b8b55db-2568-41a9-a12a-6b6a811c0bc4",
+      "name": "Final RCA Output"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "4f42421e-1ab8-4e3a-aad9-54d469eedac3",
+              "leftValue": "={{ $json.requires_human_approval }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2784,
+        -224
+      ],
+      "id": "04f4e92d-4b5a-4cdc-bf4e-60cbf958d1cf",
+      "name": "Human Approval Required?"
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "sendTo": "YOUR_NOTIFICATION_EMAIL@example.com",
+        "subject": "=Type of Approval: Approve\ud83d\udea8 DataOps Incident Approval Required - {{ $json.rca.severity }} - {{ $json.rca.incident_title }} and Disapprove",
+        "message": "=DATAOPS INCIDENT - HUMAN APPROVAL REQUIRED\n\nIncident:\n{{ $json.rca.incident_title }}\n\nSeverity:\n{{ $json.rca.severity }}\n\nRCA Quality Score:\n{{ $json.critic_score }}/100\n\nMost Likely Cause:\n{{ $json.rca.most_likely_cause }}\n\nConfirmed Facts:\n{{ $json.rca.confirmed_facts.join('\\n- ') }}\n\nRecommended Actions:\n{{ $json.rca.recommended_actions.map((a, i) => `${i + 1}. ${a.action}\nRisk: ${a.risk}\nRequires Approval: ${a.requires_approval}`).join('\\n\\n') }}\n\nPlease review the proposed remediation.\n\nApproval means that approved production-changing remediation may proceed.\nRejection means no production-changing action will be executed automatically.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        3088,
+        -336
+      ],
+      "id": "8bc65087-d584-432b-9112-238271a0c81e",
+      "name": "Human Remediation Approval"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "30cd0a0b-10d5-468b-875b-059756321298",
+              "leftValue": "={{ $json.data.approved }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3312,
+        -336
+      ],
+      "id": "182c4026-7300-46c0-bb8f-79be35468d78",
+      "name": "Approval Decision"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE orders\nSET is_quarantined = TRUE\nWHERE order_id IN (\n    SELECT order_id\n    FROM (\n        SELECT\n            order_id,\n            ROW_NUMBER() OVER (\n                PARTITION BY external_order_id\n                ORDER BY order_id\n            ) AS rn\n        FROM orders\n        WHERE external_order_id = 'DEMO-ANOM-20260928-DUP'\n    ) ranked\n    WHERE rn > 1\n)\nRETURNING\n    order_id,\n    external_order_id,\n    is_quarantined;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        3536,
+        -400
+      ],
+      "id": "4caf7fee-a804-4ac3-954f-475dd5f4cd21",
+      "name": "Quarantine Duplicate Records"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO agent_audit_log (\n    workflow_name,\n    agent_name,\n    action,\n    input_data,\n    output_data,\n    status\n)\nVALUES (\n    'WF-03 Incident RCA Agent',\n    'Human Approval',\n    'REMEDIATION_REJECTED',\n    jsonb_build_object(\n        'incident_date', '2026-09-28',\n        'external_order_id', 'DEMO-ANOM-20260928-DUP'\n    ),\n    jsonb_build_object(\n        'result', 'human rejected remediation'\n    ),\n    'REJECTED'\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        3552,
+        -144
+      ],
+      "id": "4b2172b1-480f-4591-95e6-2b77ac6846f3",
+      "name": "Log Rejected Remediation"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO agent_audit_log (\n    workflow_name,\n    agent_name,\n    action,\n    input_data,\n    output_data,\n    status\n)\nVALUES (\n    'WF-03 Incident RCA Agent',\n    'Human Approved Remediation',\n    'QUARANTINE_DUPLICATE_ORDER',\n    jsonb_build_object(\n        'incident_date', '2026-09-28',\n        'external_order_id', 'DEMO-ANOM-20260928-DUP'\n    ),\n    jsonb_build_object(\n        'result', 'duplicate record quarantined'\n    ),\n    'SUCCESS'\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        3760,
+        -400
+      ],
+      "id": "3f49953b-643d-47eb-9cbd-dda9936633b7",
+      "name": "Log Remediation"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": []
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        208,
+        48
+      ],
+      "id": "7c44a76f-7795-42dd-b212-a1ee27eb3d53",
+      "name": "Normalize Incident Input"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        3968,
+        -272
+      ],
+      "id": "05357f59-4409-430f-b638-ee157a778d40",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "de6cdcc3-a90b-4d31-b45c-03fd7592c1b1",
+              "name": "workflow",
+              "value": "WF-03",
+              "type": "string"
+            },
+            {
+              "id": "5767c529-3d55-43a8-8899-3c05d7a4ee56",
+              "name": "status",
+              "value": "={{ $('Human Remediation Approval').first().json.data.approved === true ? 'REMEDIATION_APPROVED' : 'REMEDIATION_REJECTED' }}",
+              "type": "string"
+            },
+            {
+              "id": "9a6590ac-0920-4a47-817e-f63108086bf1",
+              "name": "=incident_date",
+              "value": "={{ $('Normalize Incident Input').first().json.incident_date }}",
+              "type": "string"
+            },
+            {
+              "id": "a4ae0e8f-1a2f-4ece-8e80-4fbf2ec5fd77",
+              "name": "rca",
+              "value": "={{ $('Final RCA Output').first().json.rca }}",
+              "type": "object"
+            },
+            {
+              "id": "b319ff59-3a60-4c30-98db-39bf7763ad7f",
+              "name": "critic_score",
+              "value": "={{ $('Final RCA Output').first().json.critic_score }}",
+              "type": "number"
+            },
+            {
+              "id": "673b2502-4c72-4b90-ab39-9e5f8e574770",
+              "name": "requires_human_approval",
+              "value": "={{ $('Final RCA Output').first().json.requires_human_approval }}",
+              "type": "boolean"
+            },
+            {
+              "id": "1edbc342-85ba-44d1-ac8b-15dc07a5aee0",
+              "name": "run_id",
+              "value": "={{ $('Normalize Incident Input').first().json.run_id }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        4192,
+        -272
+      ],
+      "id": "63cfa350-3255-444e-828c-603bf9e61ed9",
+      "name": "Return RCA Result"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "f7f415e7-9604-4db4-89ac-8952dad68206",
+      "name": "Incident Input Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        2400,
+        -592
+      ]
+    }
+  ],
+  "connections": {
+    "When clicking \u2018Execute workflow\u2019": {
+      "main": [
+        [
+          {
+            "node": "Test Incident Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test Incident Context": {
+      "main": [
+        [
+          {
+            "node": "Normalize Incident Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Pipeline Evidence": {
+      "main": [
+        [
+          {
+            "node": "Merge Evidence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Price Anomaly Evidence": {
+      "main": [
+        [
+          {
+            "node": "Merge Evidence",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Get Duplicate Evidence": {
+      "main": [
+        [
+          {
+            "node": "Merge Evidence",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Get Missing Source Evidence": {
+      "main": [
+        [
+          {
+            "node": "Merge Evidence",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Merge Evidence": {
+      "main": [
+        [
+          {
+            "node": "Prepare RCA Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare RCA Context": {
+      "main": [
+        [
+          {
+            "node": "RCA Reasoning Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "RCA Reasoning Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "RCA Reasoning Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RCA Reasoning Agent": {
+      "main": [
+        [
+          {
+            "node": "RCA Critic Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "RCA Critic Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "RCA Critic Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RCA Critic Agent": {
+      "main": [
+        [
+          {
+            "node": "RCA Quality Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RCA Quality Gate": {
+      "main": [
+        [
+          {
+            "node": "Final RCA Output",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "RCA Revision Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "RCA Revision Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser2": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "RCA Revision Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RCA Revision Agent": {
+      "main": [
+        [
+          {
+            "node": "RCA Critic Agent 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "RCA Critic Agent 2",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser3": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "RCA Critic Agent 2",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RCA Critic Agent 2": {
+      "main": [
+        [
+          {
+            "node": "Final RCA Quality Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final RCA Output": {
+      "main": [
+        [
+          {
+            "node": "Human Approval Required?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Human Approval Required?": {
+      "main": [
+        [
+          {
+            "node": "Human Remediation Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Human Remediation Approval": {
+      "main": [
+        [
+          {
+            "node": "Approval Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval Decision": {
+      "main": [
+        [
+          {
+            "node": "Quarantine Duplicate Records",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Rejected Remediation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quarantine Duplicate Records": {
+      "main": [
+        [
+          {
+            "node": "Log Remediation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Incident Input": {
+      "main": [
+        [
+          {
+            "node": "Get Pipeline Evidence",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Duplicate Evidence",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Price Anomaly Evidence",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Missing Source Evidence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Remediation": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Rejected Remediation": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Return RCA Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Incident Input Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalize Incident Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "active": false,
+  "pinData": {}
+}

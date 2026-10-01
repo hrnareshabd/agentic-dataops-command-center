@@ -1,0 +1,644 @@
+{
+  "views": null,
+  "tables": [
+    {
+      "name": "agent_audit_log",
+      "columns": [
+        {
+          "name": "audit_id",
+          "type": "bigint",
+          "default": "nextval('agent_audit_log_audit_id_seq'::regclass)",
+          "identity": "",
+          "not_null": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "default": "now()",
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "workflow_name",
+          "type": "character varying(100)",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "agent_name",
+          "type": "character varying(100)",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "action",
+          "type": "character varying(100)",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "input_data",
+          "type": "jsonb",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "output_data",
+          "type": "jsonb",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "status",
+          "type": "character varying(30)",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        }
+      ],
+      "indexes": null,
+      "constraints": [
+        {
+          "name": "agent_audit_log_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (audit_id)"
+        }
+      ],
+      "rls_enabled": true
+    },
+    {
+      "name": "customers",
+      "columns": [
+        {
+          "name": "customer_id",
+          "type": "bigint",
+          "default": "nextval('customers_customer_id_seq'::regclass)",
+          "identity": "",
+          "not_null": true
+        },
+        {
+          "name": "customer_name",
+          "type": "character varying(100)",
+          "default": null,
+          "identity": "",
+          "not_null": true
+        },
+        {
+          "name": "country",
+          "type": "character varying(50)",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "segment",
+          "type": "character varying(30)",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "signup_date",
+          "type": "date",
+          "default": "CURRENT_DATE",
+          "identity": "",
+          "not_null": false
+        }
+      ],
+      "indexes": null,
+      "constraints": [
+        {
+          "name": "customers_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (customer_id)"
+        }
+      ],
+      "rls_enabled": true
+    },
+    {
+      "name": "data_quality_results",
+      "columns": [
+        {
+          "name": "result_id",
+          "type": "bigint",
+          "default": "nextval('data_quality_results_result_id_seq'::regclass)",
+          "identity": "",
+          "not_null": true
+        },
+        {
+          "name": "checked_at",
+          "type": "timestamp with time zone",
+          "default": "now()",
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "check_name",
+          "type": "character varying(100)",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "observed_value",
+          "type": "numeric",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "baseline_value",
+          "type": "numeric",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "severity",
+          "type": "character varying(20)",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "status",
+          "type": "character varying(20)",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "details",
+          "type": "jsonb",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        }
+      ],
+      "indexes": null,
+      "constraints": [
+        {
+          "name": "data_quality_results_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (result_id)"
+        }
+      ],
+      "rls_enabled": true
+    },
+    {
+      "name": "dataops_orchestrator_runs",
+      "columns": [
+        {
+          "name": "namespace",
+          "type": "text",
+          "default": null,
+          "identity": "",
+          "not_null": true
+        },
+        {
+          "name": "run_id",
+          "type": "bigint",
+          "default": null,
+          "identity": "",
+          "not_null": true
+        },
+        {
+          "name": "incident_date",
+          "type": "date",
+          "default": null,
+          "identity": "",
+          "not_null": true
+        },
+        {
+          "name": "execution_id",
+          "type": "text",
+          "default": null,
+          "identity": "",
+          "not_null": true
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "default": null,
+          "identity": "",
+          "not_null": true
+        },
+        {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "default": "now()",
+          "identity": "",
+          "not_null": true
+        },
+        {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "result",
+          "type": "jsonb",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        }
+      ],
+      "indexes": null,
+      "constraints": [
+        {
+          "name": "dataops_orchestrator_runs_namespace_check",
+          "type": "c",
+          "definition": "CHECK ((namespace = ANY (ARRAY['PRODUCTION'::text, 'DRY_RUN'::text, 'TEST'::text])))"
+        },
+        {
+          "name": "dataops_orchestrator_runs_namespace_incident_date_key",
+          "type": "u",
+          "definition": "UNIQUE (namespace, incident_date)"
+        },
+        {
+          "name": "dataops_orchestrator_runs_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (namespace, run_id)"
+        },
+        {
+          "name": "dataops_orchestrator_runs_run_id_fkey",
+          "type": "f",
+          "definition": "FOREIGN KEY (run_id) REFERENCES pipeline_runs(run_id)"
+        },
+        {
+          "name": "dataops_orchestrator_runs_status_check",
+          "type": "c",
+          "definition": "CHECK ((status = ANY (ARRAY['RUNNING'::text, 'HEALTHY'::text, 'DRY_RUN_COMPLETED'::text, 'REMEDIATION_APPROVED'::text, 'REMEDIATION_REJECTED'::text, 'FAILED'::text])))"
+        }
+      ],
+      "rls_enabled": true
+    },
+    {
+      "name": "incidents",
+      "columns": [
+        {
+          "name": "incident_id",
+          "type": "bigint",
+          "default": "nextval('incidents_incident_id_seq'::regclass)",
+          "identity": "",
+          "not_null": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "default": "now()",
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "incident_title",
+          "type": "text",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "source",
+          "type": "character varying(50)",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "severity",
+          "type": "character varying(20)",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "status",
+          "type": "character varying(20)",
+          "default": "'OPEN'::character varying",
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "probable_cause",
+          "type": "text",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "confidence",
+          "type": "numeric(5,2)",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "recommended_action",
+          "type": "text",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "requires_approval",
+          "type": "boolean",
+          "default": "false",
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "approved",
+          "type": "boolean",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "resolution_notes",
+          "type": "text",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        }
+      ],
+      "indexes": null,
+      "constraints": [
+        {
+          "name": "incidents_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (incident_id)"
+        }
+      ],
+      "rls_enabled": true
+    },
+    {
+      "name": "orders",
+      "columns": [
+        {
+          "name": "order_id",
+          "type": "bigint",
+          "default": "nextval('orders_order_id_seq'::regclass)",
+          "identity": "",
+          "not_null": true
+        },
+        {
+          "name": "external_order_id",
+          "type": "character varying(50)",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "order_ts",
+          "type": "timestamp with time zone",
+          "default": "now()",
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "customer_id",
+          "type": "bigint",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "product_id",
+          "type": "bigint",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "quantity",
+          "type": "integer",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "unit_price",
+          "type": "numeric(12,2)",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "discount_pct",
+          "type": "numeric(5,2)",
+          "default": "0",
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "status",
+          "type": "character varying(30)",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "source",
+          "type": "character varying(50)",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "is_quarantined",
+          "type": "boolean",
+          "default": "false",
+          "identity": "",
+          "not_null": false
+        }
+      ],
+      "indexes": null,
+      "constraints": [
+        {
+          "name": "orders_customer_id_fkey",
+          "type": "f",
+          "definition": "FOREIGN KEY (customer_id) REFERENCES customers(customer_id)"
+        },
+        {
+          "name": "orders_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (order_id)"
+        },
+        {
+          "name": "orders_product_id_fkey",
+          "type": "f",
+          "definition": "FOREIGN KEY (product_id) REFERENCES products(product_id)"
+        }
+      ],
+      "rls_enabled": true
+    },
+    {
+      "name": "pipeline_runs",
+      "columns": [
+        {
+          "name": "run_id",
+          "type": "bigint",
+          "default": "nextval('pipeline_runs_run_id_seq'::regclass)",
+          "identity": "",
+          "not_null": true
+        },
+        {
+          "name": "pipeline_name",
+          "type": "character varying(100)",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "status",
+          "type": "character varying(20)",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "rows_processed",
+          "type": "integer",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "error_message",
+          "type": "text",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        }
+      ],
+      "indexes": null,
+      "constraints": [
+        {
+          "name": "pipeline_runs_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (run_id)"
+        }
+      ],
+      "rls_enabled": true
+    },
+    {
+      "name": "products",
+      "columns": [
+        {
+          "name": "product_id",
+          "type": "bigint",
+          "default": "nextval('products_product_id_seq'::regclass)",
+          "identity": "",
+          "not_null": true
+        },
+        {
+          "name": "product_name",
+          "type": "character varying(100)",
+          "default": null,
+          "identity": "",
+          "not_null": true
+        },
+        {
+          "name": "category",
+          "type": "character varying(50)",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "unit_price",
+          "type": "numeric(12,2)",
+          "default": null,
+          "identity": "",
+          "not_null": true
+        }
+      ],
+      "indexes": null,
+      "constraints": [
+        {
+          "name": "products_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (product_id)"
+        }
+      ],
+      "rls_enabled": true
+    },
+    {
+      "name": "runbooks",
+      "columns": [
+        {
+          "name": "runbook_id",
+          "type": "bigint",
+          "default": "nextval('runbooks_runbook_id_seq'::regclass)",
+          "identity": "",
+          "not_null": true
+        },
+        {
+          "name": "title",
+          "type": "character varying(200)",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "category",
+          "type": "character varying(100)",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "content",
+          "type": "text",
+          "default": null,
+          "identity": "",
+          "not_null": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "default": "now()",
+          "identity": "",
+          "not_null": false
+        }
+      ],
+      "indexes": null,
+      "constraints": [
+        {
+          "name": "runbooks_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (runbook_id)"
+        }
+      ],
+      "rls_enabled": true
+    }
+  ]
+}

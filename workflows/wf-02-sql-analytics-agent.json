@@ -1,0 +1,465 @@
+{
+  "name": "WF-02 - SQL Analytics Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "45970b2f-61c3-4e60-a049-a45b212f6cc6",
+              "name": "question",
+              "value": "What was the revenue on September 28, 2026 and how does it compare with the previous 7-day daily average?",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        224,
+        288
+      ],
+      "id": "0602696f-5717-4c55-bf64-7a0fcef1f248",
+      "name": "Test Business Question"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    table_name,\n    column_name,\n    data_type\nFROM information_schema.columns\nWHERE table_schema = 'public'\nAND table_name IN (\n    'customers',\n    'products',\n    'orders',\n    'pipeline_runs'\n)\nORDER BY table_name, ordinal_position;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        448,
+        192
+      ],
+      "id": "c3959755-0db8-479d-9c2c-7724aede157f",
+      "name": "Get Database Schema"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Business question:\n\n{{ $json.question }}\n\nAvailable PostgreSQL database schema:\n\n{{ JSON.stringify($json.schema) }}\n\nGenerate ONE safe read-only PostgreSQL query that answers exactly the business question above.\n\nDo not substitute another example question.\nDo not invent a different date range.\nUse PostgreSQL CURRENT_DATE for relative dates such as yesterday.\nWhen comparing a target metric against a baseline or historical average,\nreturn both:\n\n1. Absolute difference\n2. Percentage change\n\nUse NULLIF to protect against division by zero.",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are a PostgreSQL analytics query planner for an enterprise DataOps platform.  Your task is to generate ONE safe, read-only PostgreSQL analytics query.  STRICT RULES:  1. Only SELECT or WITH queries are permitted.  2. NEVER generate: INSERT UPDATE DELETE DROP ALTER TRUNCATE CREATE GRANT REVOKE COPY CALL EXECUTE MERGE  3. Never modify database data.  4. Use only tables and columns explicitly present in the supplied database schema.  5. Never invent column names or table names.  6. Avoid SELECT *.  7. Use explicit JOIN conditions.  8. Use PostgreSQL syntax.  9. Return no more than 200 rows.  10. Revenue must be calculated as:  quantity * unit_price * (1 - discount_pct / 100.0)  unless the user explicitly requests a different definition.  11. For date comparisons, clearly define the periods used.  12. Do not answer the business question yourself.  Your job is only to create the SQL query and briefly explain what it calculates."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1120,
+        192
+      ],
+      "id": "8789a06b-5f6b-4281-85e0-837821133a9c",
+      "name": "SQL Planner"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1136,
+        432
+      ],
+      "id": "3ddb9e9f-4566-452b-b3e2-f06da0410061",
+      "name": "Google Gemini Chat Model"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"sql\": \"SELECT ...\",\n  \"explanation\": \"Explanation of what this SQL query calculates\",\n  \"expected_columns\": [\n    \"column_1\",\n    \"column_2\"\n  ]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1264,
+        432
+      ],
+      "id": "ece06a87-a677-4633-889e-62f3eb276d30",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "99720c09-5309-4559-b102-d19776256b08",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "schema",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        672,
+        192
+      ],
+      "id": "a0ba9908-07d1-412b-a856-0640d5b8c55d",
+      "name": "Aggregate Schema"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "2a56a0fa-b63f-47f8-8cec-349540c07c88",
+              "name": "=question",
+              "value": "={{ $('Normalize SQL Input').first().json.question }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        896,
+        192
+      ],
+      "id": "3428f14f-67b9-4efd-863e-217f31054495",
+      "name": "Prepare SQL Context"
+    },
+    {
+      "parameters": {
+        "jsCode": "let sql =\n  $json.output?.sql ||\n  $json.sql ||\n  '';\n\nsql = sql\n  .replace(/```sql/gi, '')\n  .replace(/```/g, '')\n  .trim();\n\nconst forbidden =\n  /\\b(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE|GRANT|REVOKE|COPY|CALL|EXECUTE|MERGE|VACUUM)\\b/i;\n\nconst allowedStart =\n  /^(SELECT|WITH)\\b/i.test(sql);\n\nconst statements =\n  sql\n    .split(';')\n    .filter(s => s.trim().length > 0);\n\nif (!allowedStart) {\n  throw new Error(\n    'SQL rejected: query must begin with SELECT or WITH.'\n  );\n}\n\nif (forbidden.test(sql)) {\n  throw new Error(\n    'SQL rejected: destructive SQL detected.'\n  );\n}\n\nif (statements.length > 1) {\n  throw new Error(\n    'SQL rejected: multiple SQL statements are not allowed.'\n  );\n}\n\nsql = sql.replace(/;+\\s*$/, '');\n\nreturn [\n  {\n    json: {\n      question:\n        $('Prepare SQL Context').first().json.question,\n\n      safe_sql: sql,\n\n      explanation:\n        $json.output?.explanation ||\n        $json.explanation ||\n        '',\n\n      expected_columns:\n        $json.output?.expected_columns ||\n        $json.expected_columns ||\n        [],\n\n      security_check: 'PASSED'\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1472,
+        192
+      ],
+      "id": "f02f6f63-0dcf-4a93-b9af-671a6d15c072",
+      "name": "SQL Safety Gate"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.safe_sql }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1696,
+        192
+      ],
+      "id": "4355e966-dbc5-4ac3-90bf-4b7f9660274d",
+      "name": "Execute Safe Analytics SQL"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "You are a Senior Data Analyst inside an enterprise DataOps platform.\n\nYou receive:\n1. The original business question.\n2. Results from a validated read-only SQL query.\n\nYour responsibility is to explain ONLY what the supplied data supports.\n\nSTRICT RULES:\n\n1. Never invent numbers.\n\n2. Never invent units or currencies.\n   If the database does not provide a currency, report numeric\n   monetary values without $, \u20ac, \u00a3, or any other currency symbol.\n\n3. Never claim causation unless the supplied evidence supports it.\n\n4. Do not invent explanations such as:\n   - seasonality\n   - holidays\n   - marketing campaigns\n   - outages\n   - stock-outs\n   - market events\n   unless evidence for them is provided.\n\n5. Clearly distinguish:\n   FACTS\n   from\n   UNVERIFIED HYPOTHESES.\n\n6. If only metric results are supplied, report the metric change\n   and state that root-cause investigation is required.\n\n7. Preserve the exact date or comparison period from the question.\n\n8. Round monetary/decimal metrics to 2 decimal places.\n\n9. Round percentages to 2 decimal places.\n\n10. Highlight:\n    - target metric\n    - baseline metric\n    - absolute difference\n    - percentage change\n\n11. If the result shows a substantial deviation, identify it as\n    an anomaly relative to the supplied baseline, but do not\n    explain why it happened without additional evidence.\n\n12. Keep the response concise and suitable for a business stakeholder.\n\nDo not perform root-cause analysis.\nRoot-cause analysis is handled by a separate Incident RCA Agent.",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=Business question:\n\n{{ $('Prepare SQL Context').first().json.question }}\n\nValidated SQL result:\n\n{{ JSON.stringify($json) }}\n\nExplain the result clearly for a business stakeholder."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1920,
+        192
+      ],
+      "id": "0f514fe6-4a56-462a-a0dc-55a72e432cf3",
+      "name": "Business Insight Agent."
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1936,
+        432
+      ],
+      "id": "d09a4652-f89d-425e-9747-c100b76ae8ec",
+      "name": "Google Gemini Chat Model1"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"summary\": \"string\",\n  \"target_value\": \"string\",\n  \"baseline_value\": \"string\",\n  \"absolute_difference\": \"string\",\n  \"percentage_change\": \"string\",\n  \"insights\": [\n    \"string\"\n  ],\n  \"root_cause_status\": \"REQUIRES_INVESTIGATION\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        2064,
+        432
+      ],
+      "id": "0a5944a2-6f34-468d-b715-42727eb3c6f7",
+      "name": "Structured Output Parser1"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "50f5112c-aff0-42dc-b08b-09c9fd5cb6c2",
+      "name": "SQL Input Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "analytics-question",
+              "name": "question",
+              "type": "string",
+              "value": "={{ $json.question || 'What was the revenue on September 28, 2026 and how does it compare with the previous 7-day daily average?' }}"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "69fe79dd-8c11-47fc-b5f3-2ca8eb4d747e",
+      "name": "Normalize SQL Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "analytics-workflow",
+              "name": "workflow",
+              "type": "string",
+              "value": "WF-02"
+            },
+            {
+              "id": "analytics-status",
+              "name": "status",
+              "type": "string",
+              "value": "COMPLETED"
+            },
+            {
+              "id": "analytics-result",
+              "name": "analytics",
+              "type": "object",
+              "value": "={{ $json.output }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2511b3e5-65b3-488c-a66c-db9df4d6cd0b",
+      "name": "Final SQL Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2272,
+        192
+      ]
+    }
+  ],
+  "connections": {
+    "Test Business Question": {
+      "main": [
+        [
+          {
+            "node": "Get Database Schema",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Database Schema": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Schema",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "SQL Planner",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "SQL Planner",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalize SQL Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Schema": {
+      "main": [
+        [
+          {
+            "node": "Prepare SQL Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare SQL Context": {
+      "main": [
+        [
+          {
+            "node": "SQL Planner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL Planner": {
+      "main": [
+        [
+          {
+            "node": "SQL Safety Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL Safety Gate": {
+      "main": [
+        [
+          {
+            "node": "Execute Safe Analytics SQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Safe Analytics SQL": {
+      "main": [
+        [
+          {
+            "node": "Business Insight Agent.",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Business Insight Agent.",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Business Insight Agent.",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL Input Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalize SQL Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize SQL Input": {
+      "main": [
+        [
+          {
+            "node": "Get Database Schema",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Business Insight Agent.": {
+      "main": [
+        [
+          {
+            "node": "Final SQL Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "active": false,
+  "pinData": {}
+}
